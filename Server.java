@@ -1,9 +1,10 @@
+import java.lang.management.ManagementFactory;
+import java.lang.management.RuntimeMXBean;
 import java.net.*;
 import java.io.*;
 import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.util.StringTokenizer;
-//org.json.simple.JSONObject.class;
 
 /**
  * Server class that acts as the server that the clients can connect to
@@ -11,11 +12,17 @@ import java.util.StringTokenizer;
  *
  * @author Vilma Christensen (id20vcn), Sofia Leksell (id20sll)
  *
- * @since 2021-05-10
+ * @since 2021-10-22
  */
 
 public class Server {
 
+    /**
+     * Creates a server socket and accepts client. For every new client, a new thread is created.
+     *
+     * @param args
+     * @throws IOException
+     */
     public static void main(String[] args) throws IOException {
         ServerSocket serverSocket = new ServerSocket(1991);
 
@@ -39,130 +46,227 @@ public class Server {
  *
  * @author Vilma Christensen (id20vcn), Sofia Leksell (id20sll)
  *
- * @since 2021-05-10
+ * @since 2021-10-22
  */
 
 
 class MultipleClients extends Thread {
-        final Socket socket;
+    final Socket socket;
+    public static int count=0;
 
-        public MultipleClients(Socket socket) {
-            this.socket = socket;
+    public MultipleClients(Socket socket) {
+        this.socket = socket;
+        count++;
 
-        }
-        //connection=hur många sockets som skapats
-        //uptime= hur länge servern vart igång
-        @Override
-        public void run() {
-            //Här ska det göras något, dvs typ ansluta till servern
-            //Vi vill läsa in vad klientens socket har att ge till servern och det är det som trådarna möjliggör.
-            //Den vill ta in klientens outputstream och göra det till serverns inputstream.
-            //Den ska kunna göra en HTTP Request och filerna som är accepterade är image, index osv.
-            //Den ska ignorera det som inte är dessa filer
+    }
 
-            //Servern kommer att köra en oändlig while-loop och skapa ny trådar för att skriva ut dem
+    /**
+     * Enables the server to interact with client
+     */
+    @Override
+    public void run() {
+
+        try {
+            //Connect server to client socket
+            PrintWriter output = new PrintWriter(socket.getOutputStream());
+            BufferedReader input = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+
+            String filename;
+            String contentType = "";
+            String request = getRequest(input);
+
+            //Get the time for which the server has been running
+            DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss");
+            LocalDateTime now = LocalDateTime.now();
+            RuntimeMXBean uptime = ManagementFactory.getRuntimeMXBean();
+
+            StringTokenizer keepToken = getStringTokenizer(request);
 
             try {
-                //Connect server to client socket
-                PrintWriter output = new PrintWriter(socket.getOutputStream());
-                BufferedReader input = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+                filename = saveFilenameAsToken(keepToken);
 
-                String filename;
-                String finishedFilename = "";
-                String request = input.readLine();
-                System.out.println(request);
-                String contentType = "";
-                //Get current date and time to put in header
-                DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss");
-                LocalDateTime now = LocalDateTime.now();
+                File fileSearcher = new File("www/" + filename);
 
-
-                //Treat a line without GET... as file not found
-                //Create a object stringtokenizer to keep a token from the string in
-                StringTokenizer keepToken = new StringTokenizer(request);
-                //Vill göra om till en sybstring
-                //Vi vill ta bort de fyra första characters
-                //GET /textfile.txt
-                try {
-                    //Vill säkerställa att GET finns i requesten och att den är på första plats
-                    if (keepToken.nextToken().equals("GET") && keepToken.hasMoreElements()) {
-                        //Vi har säkerställt att GET är på första platsen
-                        //Vi vill skapa en sträng av det ordet som kommer efter GET alltså
-                        filename = keepToken.nextToken();
-                    } else {
-                        //Ändra exception
-                        throw new FileNotFoundException();
-                    }
-
-                    if (filename.indexOf("/") == 0) {
-                        //Removing first character in the string containing filename and save it as a new string
-                        finishedFilename = filename.substring(1);
-
-                    }
-
-                    //If the opened file contains....
-                    if (finishedFilename.endsWith("html")) {
-                        contentType = "index/html";
-                        //öppna filen som ligger i www/ och måste skriva in sökvägen. ska bara behöva skriva in ipadressen, inte mappen
-                    }
-                    if (finishedFilename.endsWith("png")) {
-                        contentType = "image/png";
-                        //öppna filen
-
-                        //filenotfoundexpetion
-                    }
-                    if (finishedFilename.endsWith("txt")) {
-                        contentType = "text/plain";
-                        //Lika många bytes som antalet tecken
-                        //Open file och se hur stor bytes det är på filen, finns i java, content-length
-                    }
-                    if (finishedFilename.endsWith("debug")) {
-                        contentType = "application/json";
-                        /*JSONObject jo = new JSONObject();
-                        jo.put("name", "jon doe");
-                        jo.put("age", "22");
-                        jo.put("city", "chicago");*/
-                        System.out.println("inside debug");
-                        output.println("HTTP/1.1 200 OK\r\n" +
-                                "Server: Sofia and Vilma's cool web server\r\n" +
-                                "Date: " + dtf.format(now) + "\r\n" +
-                                "Content-length: " + 10 + "\r\n" +
-                                "Content-type: " + contentType + "\r\n" +
-                                "");
-                        //byt ut hej på dig mot applicationjson
-                        String outputLine= "hej på dig";
-                        output.println(outputLine);
-
-
-                        output.flush();
-                    }
-
-
-                    //Storleken på datan som skickas,
-                    output.println("HTTP/1.1 200 OK\r\n" +
-                            "Server: Sofia and Vilma's cool web server\r\n" +
-                            "Date: " + dtf.format(now) + "\r\n" +
-                            "Content-length: " + 10 + "\r\n" +
-                            "Content-type: " + contentType + "\r\n" +
-                            "");
-
-
-                    //Inte bara skriva ut application json som print utan skicka tillbaka till klienten
-                } catch (FileNotFoundException notFound) {
-                    System.out.println("HTTP/1.1 404 Not Found\r\n" +
-                            "Server: Sofia and Vilma's cool web server\r\n" +
-                            "Content-length: " + dtf.format(now) + "\r\n" +
-                            "Content-length: " + contentType + "\r\n" +
-                            "Content-type: " + contentType + "\r\n" +
-                            "");
-                    //Här kanske man ska hunna skriva in requesten igen så att den är på rätt sätt, dvs GET...
+                //Ignores if file exists
+                if(ifFileNotFoundThrowException(fileSearcher) && !filename.endsWith("debug")){
+                    print404NotFound(output, dtf, now);
                 }
 
+                if ((filename.endsWith("html") || filename.endsWith("png") || filename.endsWith("txt")) &&
+                        !ifFileNotFoundThrowException(fileSearcher)) {
+                    if (filename.endsWith("html")) {
+                        contentType = "text/html";
+                    } else if (filename.endsWith("png")) {
+                        contentType = "image/png";
+                    } else if (filename.endsWith("txt")) {
+                        contentType = "text/plain";
+                    }
+                    printHttpResponse(output, contentType, dtf, now, fileSearcher);
+                    fileToBytesAndWrite(fileSearcher);
+                }
 
-            } catch (IOException ignored) {
-                // Ignore
+                if (filename.endsWith("debug")) {
+                    contentType = "application/json";
+                    printOutJson(output, contentType, dtf, now, uptime);
+                }
+
+            } catch (IllegalArgumentException argumentException) {
+                print404NotFound(output, dtf, now);
             }
+
+        } catch (IOException ignored) {
+            System.out.println("Could not complete");
         }
+
+        try {
+            System.out.println("Socket is being closed");
+            socket.close();
+        } catch(IOException e){
+                e.printStackTrace();
+        }
+    }
+
+    /**
+     * Reads input from client to get HTTP-request
+     *
+     * @param input (get request from the client)
+     * @return the request as a string
+     * @throws IOException
+     */
+    private String getRequest(BufferedReader input) throws IOException {
+        String request = input.readLine();
+        System.out.println("Request from client: " + request);
+        return request;
+    }
+
+    /**
+     * The first word in the get-request saves as a token
+     *
+     * @param request (the HTTP-request as a string)
+     * @return the first word from the string
+     */
+    private StringTokenizer getStringTokenizer(String request) {
+        StringTokenizer keepToken;
+        if(request != null) {
+            keepToken = new StringTokenizer(request);
+        } else {
+            throw new NullPointerException();
+        }
+        return keepToken;
+    }
+
+    /**
+     * Get filename from the get-request
+     *
+     * @param keepToken (a string of tokens of the request)
+     * @return next token in the string, a file name
+     */
+    private String saveFilenameAsToken(StringTokenizer keepToken) {
+        String filename;
+        if (keepToken.nextToken().equals("GET") && keepToken.hasMoreElements()) {
+            filename = keepToken.nextToken();
+        } else {
+            throw new IllegalArgumentException();
+        }
+        return filename;
+    }
+
+    /**
+     * Prints out Json message
+     *
+     * @param output (the output to the client)
+     * @param contentType (content type of the file)
+     * @param dtf (object to print date and time)
+     * @param now (get current date and time)
+     * @param uptime (how long the server has been running)
+     */
+    private void printOutJson(PrintWriter output, String contentType, DateTimeFormatter dtf, LocalDateTime now, RuntimeMXBean uptime) {
+        String outputLine= "{\n" +
+                "  \"name\": \"Vilma and Sofia's cool webserver\",\n" +
+                "  \"connections\": " +count+ ",\n"+
+                "  \"uptime\": " + uptime.getUptime()+ ",\n"+
+                "  \"owners\": [\"Sofia Leksell (id20sll@cs.umu.se)\", \"Vilma Christensen (id20vcn@cs.umu.se)\"]\n" +
+                "}";
+
+        int length = outputLine.length();
+        output.println("HTTP/1.1 200 OK\r\n" +
+                "Server: Sofia and Vilma's cool web server\r\n" +
+                "Date: " + dtf.format(now) + "\r\n" +
+                "Content-length: " + length + "\r\n" +
+                "Content-type: " + contentType + "\r\n" +
+                "");
+        output.println(outputLine);
+        output.flush();
+    }
+
+    /**
+     * Prints out the HTTP-response
+     *
+     * @param output (the output to the client)
+     * @param contentType (content type of the file)
+     * @param dtf (object to print date and time)
+     * @param now (get current date and time)
+     * @param fileSearcher (the file with path)
+     */
+    private void printHttpResponse(PrintWriter output, String contentType, DateTimeFormatter dtf, LocalDateTime now, File fileSearcher) {
+        String outputLine = ("HTTP/1.1 200 OK\r\n" +
+                "Server: Sofia and Vilma's cool web server\r\n" +
+                "Date: " + dtf.format(now) + "\r\n" +
+                "Content-length: " + fileSearcher.length() + "\r\n" +
+                "Content-type: " + contentType + "\r\n" +
+                "");
+        output.println(outputLine);
+        output.flush();
+    }
+
+    /**
+     * Converts the file to bytes and write to output stream
+     *
+     * @param f (a file)
+     * @throws IOException
+     */
+    private void fileToBytesAndWrite(File f) throws IOException {
+        int lengthOfFile = (int) f.length();
+        byte[] byteFile = new byte [lengthOfFile];
+
+        DataInputStream dataIn = new DataInputStream(new FileInputStream(f));
+        dataIn.readFully(byteFile);
+
+        BufferedOutputStream outputStream = new BufferedOutputStream(socket.getOutputStream());
+        outputStream.write(byteFile, 0, lengthOfFile);
+        outputStream.flush();
+    }
+
+    /**
+     * Checks if file exists
+     *
+     * @param filename (a file)
+     * @return true if file does not exist, otherwise false
+     * @throws IllegalArgumentException
+     */
+    private boolean ifFileNotFoundThrowException(File filename) throws IllegalArgumentException {
+        if(!filename.exists()){
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Prints out the HTTP-response 404 Not Found
+     *
+     * @param output (the output to the client)
+     * @param dtf (object to print date and time)
+     * @param now (get current date and time)
+     */
+    private void print404NotFound(PrintWriter output, DateTimeFormatter dtf, LocalDateTime now) {
+        String print = ("HTTP/1.1 404 Not Found\r\n" +
+                "Server: Sofia and Vilma's cool web server\r\n" +
+                "Date: " + dtf.format(now) + "\r\n" +
+                "Content-length: 0 \r\n" +
+                "Content-type: text/plain \r\n");
+        output.println(print);
+        output.flush();
+    }
 }
 
 
